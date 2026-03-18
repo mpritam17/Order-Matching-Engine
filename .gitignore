@@ -29,3 +29,13 @@ compile_commands.json
 # OS/editor noise
 .DS_Store
 .vscode/.ropeproject/
+.vscode/
+
+# Local reference/planning files
+LOB.pdf
+LOB_with_improvements.txt
+improvements.txt
+
+# Crash dumps
+core
+core.*
