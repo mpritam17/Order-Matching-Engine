@@ -1,0 +1,31 @@
+# Build outputs
+/build/
+/build-*/
+cmake-build-*/
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+Makefile
+cmake_install.cmake
+CTestTestfile.cmake
+compile_commands.json
+
+# Binary artifacts
+*.o
+*.obj
+*.a
+*.so
+*.dll
+*.dylib
+*.exe
+
+# Logs and temporary files
+*.log
+*.tmp
+*.swp
+*~
+
+# OS/editor noise
+.DS_Store
+.vscode/.ropeproject/
