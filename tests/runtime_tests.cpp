@@ -58,7 +58,7 @@ void test_runtime_week2_order_flow() {
     const lob::MatchResult limit = engine.submit_limit_order(4001, lob::Side::Buy, 101, 6);
     expect(limit.filled_qty == 6, "runtime limit order filled qty");
     expect(limit.remaining_qty == 0, "runtime limit has no remainder");
-    expect(limit.fills.size() == 2, "runtime limit has two fills");
+    expect(limit.fill_count == 2, "runtime limit has two fills");
     expect(limit.fills[0].passive_order_id == 3001, "runtime limit consumes FIFO first");
 
     const lob::MatchResult market = engine.submit_market_order(5001, lob::Side::Buy, 10);
@@ -71,7 +71,7 @@ void test_runtime_week2_order_flow() {
 
     const lob::MatchResult check_fifo = engine.submit_limit_order(7001, lob::Side::Sell, 99, 5);
     expect(check_fifo.filled_qty == 5, "sell crosses bid level");
-    expect(!check_fifo.fills.empty(), "has fill for fifo check");
+    expect(check_fifo.fill_count > 0, "has fill for fifo check");
     expect(check_fifo.fills[0].passive_order_id == 6002, "replace reset priority behind existing order");
 
     const lob::BookSnapshot snap = engine.shutdown_and_snapshot();

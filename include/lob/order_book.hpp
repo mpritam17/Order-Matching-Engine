@@ -47,11 +47,14 @@ struct Fill {
 };
 
 struct MatchResult {
+    static constexpr std::size_t kMaxFills = 16;
+
     Quantity filled_qty{};
     Quantity remaining_qty{};
     bool rested{};
     bool priority_preserved{};
-    std::vector<Fill> fills{};
+    std::size_t fill_count{};
+    std::array<Fill, kMaxFills> fills{};
 };
 
 class OrderNodePool {
@@ -107,6 +110,7 @@ private:
     void remove_node(OrderNode* node);
 
     std::array<LevelMap, 2> levels_{};
+    std::array<std::vector<Price>, 2> sorted_levels_{};
     ankerl::unordered_dense::map<OrderId, OrderNode*> orders_by_id_{};
 
     OrderNodePool order_pool_{};
