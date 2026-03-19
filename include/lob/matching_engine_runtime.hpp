@@ -25,7 +25,8 @@ class MatchingEngineRuntime {
 public:
     explicit MatchingEngineRuntime(
         std::size_t expected_orders = 1 << 20,
-        std::size_t queue_capacity = 1 << 14);
+        std::size_t queue_capacity = 1 << 14,
+        int worker_core_id = -1);
     ~MatchingEngineRuntime();
 
     MatchingEngineRuntime(const MatchingEngineRuntime&) = delete;
@@ -97,6 +98,7 @@ private:
     std::atomic<std::size_t> rejected_full_{0};
     std::atomic<std::size_t> rejected_stopped_{0};
 
+    int worker_core_id_{-1};
     std::jthread worker_;
 };
 
