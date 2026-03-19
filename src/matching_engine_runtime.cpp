@@ -4,6 +4,7 @@
 #include <bit>
 #include <chrono>
 #include <utility>
+#include <pthread.h>
 
 #if defined(__x86_64__) || defined(_M_X64)
 #include <immintrin.h>
@@ -246,6 +247,14 @@ bool MatchingEngineRuntime::queue_empty() const noexcept {
 }
 
 void MatchingEngineRuntime::run() {
+#if defined(__linux__) && !defined(__ANDROID__)
+    // Pin worker thread to CPU core 1 (if available) as a default heuristic execution setup.
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET(1, &cpuset);
+    pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+#endif
+
     while (true) {
         Command cmd{};
 
