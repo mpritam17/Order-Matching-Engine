@@ -2,10 +2,10 @@
 
 #include <array>
 #include <cstddef>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
+#include "ankerl/unordered_dense.h"
 #include "lob/types.hpp"
 
 namespace lob {
@@ -97,7 +97,7 @@ public:
     [[nodiscard]] std::size_t live_order_count() const noexcept;
 
 private:
-    using LevelMap = std::unordered_map<Price, PriceLevel*>;
+    using LevelMap = ankerl::unordered_dense::map<Price, PriceLevel*>;
 
     [[nodiscard]] PriceLevel* get_or_create_level(Side side, Price price);
     [[nodiscard]] LevelMap& levels_for(Side side) noexcept;
@@ -107,7 +107,7 @@ private:
     void remove_node(OrderNode* node);
 
     std::array<LevelMap, 2> levels_{};
-    std::unordered_map<OrderId, OrderNode*> orders_by_id_{};
+    ankerl::unordered_dense::map<OrderId, OrderNode*> orders_by_id_{};
 
     OrderNodePool order_pool_{};
     PriceLevelPool level_pool_{};

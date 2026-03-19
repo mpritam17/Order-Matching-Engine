@@ -5,6 +5,15 @@
 #include <chrono>
 #include <utility>
 
+#if defined(__x86_64__) || defined(_M_X64)
+#include <immintrin.h>
+#define CPU_PAUSE() _mm_pause()
+#elif defined(__aarch64__)
+#define CPU_PAUSE() __asm__ volatile("yield" ::: "memory")
+#else
+#define CPU_PAUSE() do {} while(0)
+#endif
+
 namespace lob {
 
 namespace {
@@ -143,7 +152,6 @@ void MatchingEngineRuntime::shutdown() {
     }
 
     worker_.request_stop();
-    wait_cv_.notify_all();
     worker_.join();
 }
 
@@ -184,7 +192,6 @@ bool MatchingEngineRuntime::enqueue(Command cmd) {
     ring_[write & ring_mask_] = std::move(cmd);
     write_idx_.store(write + 1, std::memory_order_release);
     accepted_commands_.fetch_add(1, std::memory_order_relaxed);
-    wait_cv_.notify_one();
     return true;
 }
 
@@ -212,16 +219,11 @@ void MatchingEngineRuntime::run() {
     while (true) {
         Command cmd{};
 
-        if (!try_dequeue(cmd)) {
+        while (!try_dequeue(cmd)) {
             if (worker_.get_stop_token().stop_requested() && queue_empty()) {
-                break;
+                return;
             }
-
-            std::unique_lock<std::mutex> lock(wait_mutex_);
-            wait_cv_.wait(lock, [this] {
-                return !queue_empty() || worker_.get_stop_token().stop_requested();
-            });
-            continue;
+            CPU_PAUSE();
         }
 
         switch (cmd.type) {

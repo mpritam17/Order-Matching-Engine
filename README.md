@@ -78,5 +78,6 @@ Runtime API (`include/lob/matching_engine_runtime.hpp`):
 ## Notes
 
 - The design currently prioritizes deterministic behavior and clear evolution steps over full production completeness.
-- Some indexing paths still use `std::unordered_map`; this can be swapped for flatter hash maps later.
+- Order Book indexing paths use `ankerl::unordered_dense` for fast, cache-friendly lookups.
+- The consumer worker runs a lock-free spin-wait loop using processor pause instructions to avoid thread context switches.
 - Runtime queue is SPSC and bounded. Under load, submissions can be rejected when the queue is full.

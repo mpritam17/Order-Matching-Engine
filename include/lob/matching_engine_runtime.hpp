@@ -74,9 +74,6 @@ private:
     [[nodiscard]] bool queue_empty() const noexcept;
     void run();
 
-    std::mutex wait_mutex_;
-    std::condition_variable_any wait_cv_;
-
     std::vector<Command> ring_{};
     std::size_t ring_mask_{};
     std::atomic<std::size_t> write_idx_{0};
