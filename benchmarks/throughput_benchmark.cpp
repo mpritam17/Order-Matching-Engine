@@ -20,14 +20,14 @@ std::size_t parse_iterations(int argc, char** argv) {
     return static_cast<std::size_t>(parsed);
 }
 
-void benchmark_throughput(std::size_t iterations) {
+void benchmark_throughput(std::size_t iterations, std::size_t initial_book_size) {
     // Large sizes so the queues/pools don't become the bottleneck
     // Use worker thread on unpinned core by default
     lob::MatchingEngineRuntime engine(1 << 24, 1 << 20);
 
     // Warm up the book with some initial resting liquidity to allow crossing, partial fills and cancels
-    std::cout << "Seeding initial LOB liquidity...\n";
-    for(std::size_t i = 0; i < 500'000; ++i) {
+    std::cout << "Seeding initial LOB liquidity with " << initial_book_size << " orders...\n";
+    for(std::size_t i = 0; i < initial_book_size; ++i) {
         lob::Price px = 1000 + (i % 100);
         engine.submit_add(100ULL + i, lob::Side::Sell, px, 50);
         engine.submit_add(2000000ULL + i, lob::Side::Buy, 999 - (i % 100), 50);
@@ -95,7 +95,17 @@ void benchmark_throughput(std::size_t iterations) {
 
 int main(int argc, char** argv) {
     const std::size_t iterations = parse_iterations(argc, argv);
+    std::size_t book_size = 500'000; // Default size
+
+    // We allow setting the book size through a third argument
+    if (argc >= 3) {
+        std::size_t parsed_book_size = std::atoi(argv[2]);
+        if (parsed_book_size > 0) {
+            book_size = parsed_book_size;
+        }
+    }
+
     std::cout << "Tip: Run in Release build for actual throughput numbers (-DCMAKE_BUILD_TYPE=Release)\n";
-    benchmark_throughput(iterations);
+    benchmark_throughput(iterations, book_size);
     return 0;
 }
