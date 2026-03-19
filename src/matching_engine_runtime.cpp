@@ -28,7 +28,9 @@ std::size_t normalize_capacity(std::size_t requested) {
 MatchingEngineRuntime::MatchingEngineRuntime(std::size_t expected_orders, std::size_t queue_capacity)
     : ring_(normalize_capacity(queue_capacity)),
       ring_mask_(ring_.size() - 1),
-    book_(expected_orders),
+      egress_ring_(normalize_capacity(queue_capacity)),
+      egress_ring_mask_(egress_ring_.size() - 1),
+      book_(expected_orders),
       worker_([this] { run(); }) {}
 
 MatchingEngineRuntime::~MatchingEngineRuntime() {
@@ -61,34 +63,30 @@ bool MatchingEngineRuntime::submit_modify(OrderId id, Quantity new_qty) {
 }
 
 bool MatchingEngineRuntime::submit_replace(OrderId id, Price new_price, Quantity new_qty) {
-    auto reply = std::make_shared<std::promise<bool>>();
-    auto done = reply->get_future();
-
     Command cmd{};
     cmd.type = CommandType::Replace;
     cmd.id = id;
     cmd.price = new_price;
     cmd.qty = new_qty;
-    cmd.bool_reply = std::move(reply);
 
     if (!enqueue(std::move(cmd))) {
         return false;
     }
 
-    return done.get();
+    EgressMessage reply{};
+    while (!try_dequeue_egress(reply)) {
+        CPU_PAUSE();
+    }
+    return reply.bool_reply;
 }
 
 MatchResult MatchingEngineRuntime::submit_limit_order(OrderId id, Side side, Price price, Quantity qty) {
-    auto reply = std::make_shared<std::promise<MatchResult>>();
-    auto done = reply->get_future();
-
     Command cmd{};
     cmd.type = CommandType::Limit;
     cmd.id = id;
     cmd.side = side;
     cmd.price = price;
     cmd.qty = qty;
-    cmd.match_reply = std::move(reply);
 
     if (!enqueue(std::move(cmd))) {
         MatchResult failed{};
@@ -96,19 +94,19 @@ MatchResult MatchingEngineRuntime::submit_limit_order(OrderId id, Side side, Pri
         return failed;
     }
 
-    return done.get();
+    EgressMessage reply{};
+    while (!try_dequeue_egress(reply)) {
+        CPU_PAUSE();
+    }
+    return reply.match_reply;
 }
 
 MatchResult MatchingEngineRuntime::submit_market_order(OrderId id, Side side, Quantity qty) {
-    auto reply = std::make_shared<std::promise<MatchResult>>();
-    auto done = reply->get_future();
-
     Command cmd{};
     cmd.type = CommandType::Market;
     cmd.id = id;
     cmd.side = side;
     cmd.qty = qty;
-    cmd.match_reply = std::move(reply);
 
     if (!enqueue(std::move(cmd))) {
         MatchResult failed{};
@@ -116,20 +114,26 @@ MatchResult MatchingEngineRuntime::submit_market_order(OrderId id, Side side, Qu
         return failed;
     }
 
-    return done.get();
+    EgressMessage reply{};
+    while (!try_dequeue_egress(reply)) {
+        CPU_PAUSE();
+    }
+    return reply.match_reply;
 }
 
 void MatchingEngineRuntime::sync() {
     while (!worker_.get_stop_token().stop_requested()) {
-        auto barrier = std::make_shared<std::promise<void>>();
-        auto done = barrier->get_future();
-
         Command cmd{};
         cmd.type = CommandType::Barrier;
-        cmd.barrier = std::move(barrier);
 
         if (enqueue(std::move(cmd))) {
-            done.wait();
+            EgressMessage reply{};
+            while (!try_dequeue_egress(reply)) {
+                if (worker_.get_stop_token().stop_requested()) {
+                    return;
+                }
+                CPU_PAUSE();
+            }
             return;
         }
 
@@ -209,6 +213,32 @@ bool MatchingEngineRuntime::try_dequeue(Command& cmd) {
     return true;
 }
 
+bool MatchingEngineRuntime::enqueue_egress(EgressMessage msg) {
+    const std::size_t write = egress_write_idx_.load(std::memory_order_relaxed);
+    const std::size_t read = egress_read_idx_.load(std::memory_order_acquire);
+    if ((write - read) >= egress_ring_.size()) {
+        return false;
+    }
+
+    egress_ring_[write & egress_ring_mask_] = std::move(msg);
+    egress_write_idx_.store(write + 1, std::memory_order_release);
+    return true;
+}
+
+bool MatchingEngineRuntime::try_dequeue_egress(EgressMessage& msg) {
+    const std::size_t read = egress_read_idx_.load(std::memory_order_relaxed);
+    const std::size_t write = egress_write_idx_.load(std::memory_order_acquire);
+    if (read == write) {
+        return false;
+    }
+
+    EgressMessage& slot = egress_ring_[read & egress_ring_mask_];
+    msg = std::move(slot);
+    slot = EgressMessage{};
+    egress_read_idx_.store(read + 1, std::memory_order_release);
+    return true;
+}
+
 bool MatchingEngineRuntime::queue_empty() const noexcept {
     const std::size_t read = read_idx_.load(std::memory_order_acquire);
     const std::size_t write = write_idx_.load(std::memory_order_acquire);
@@ -236,32 +266,45 @@ void MatchingEngineRuntime::run() {
             case CommandType::Modify:
                 (void)book_.modify_order(cmd.id, cmd.qty);
                 break;
-            case CommandType::Replace:
-                if (cmd.bool_reply) {
-                    cmd.bool_reply->set_value(book_.replace_order(cmd.id, cmd.price, cmd.qty));
-                } else {
-                    (void)book_.replace_order(cmd.id, cmd.price, cmd.qty);
+            case CommandType::Replace: {
+                EgressMessage reply{};
+                reply.type = cmd.type;
+                reply.bool_reply = book_.replace_order(cmd.id, cmd.price, cmd.qty);
+                while (!enqueue_egress(reply)) {
+                    if (worker_.get_stop_token().stop_requested()) return;
+                    CPU_PAUSE();
                 }
                 break;
-            case CommandType::Limit:
-                if (cmd.match_reply) {
-                    cmd.match_reply->set_value(book_.process_limit_order(cmd.id, cmd.side, cmd.price, cmd.qty));
-                } else {
-                    (void)book_.process_limit_order(cmd.id, cmd.side, cmd.price, cmd.qty);
+            }
+            case CommandType::Limit: {
+                EgressMessage reply{};
+                reply.type = cmd.type;
+                reply.match_reply = book_.process_limit_order(cmd.id, cmd.side, cmd.price, cmd.qty);
+                while (!enqueue_egress(std::move(reply))) {
+                    if (worker_.get_stop_token().stop_requested()) return;
+                    CPU_PAUSE();
                 }
                 break;
-            case CommandType::Market:
-                if (cmd.match_reply) {
-                    cmd.match_reply->set_value(book_.process_market_order(cmd.id, cmd.side, cmd.qty));
-                } else {
-                    (void)book_.process_market_order(cmd.id, cmd.side, cmd.qty);
+            }
+            case CommandType::Market: {
+                EgressMessage reply{};
+                reply.type = cmd.type;
+                reply.match_reply = book_.process_market_order(cmd.id, cmd.side, cmd.qty);
+                while (!enqueue_egress(std::move(reply))) {
+                    if (worker_.get_stop_token().stop_requested()) return;
+                    CPU_PAUSE();
                 }
                 break;
-            case CommandType::Barrier:
-                if (cmd.barrier) {
-                    cmd.barrier->set_value();
+            }
+            case CommandType::Barrier: {
+                EgressMessage reply{};
+                reply.type = cmd.type;
+                while (!enqueue_egress(reply)) {
+                    if (worker_.get_stop_token().stop_requested()) return;
+                    CPU_PAUSE();
                 }
                 break;
+            }
         }
 
         live_orders_.store(book_.live_order_count(), std::memory_order_relaxed);

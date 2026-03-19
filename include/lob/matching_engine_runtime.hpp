@@ -64,13 +64,18 @@ private:
         Side side{Side::Buy};
         Price price{};
         Quantity qty{};
-        std::shared_ptr<std::promise<void>> barrier{};
-        std::shared_ptr<std::promise<bool>> bool_reply{};
-        std::shared_ptr<std::promise<MatchResult>> match_reply{};
+    };
+
+    struct EgressMessage {
+        CommandType type{};
+        bool bool_reply{};
+        MatchResult match_reply{};
     };
 
     bool enqueue(Command cmd);
     bool try_dequeue(Command& cmd);
+    bool enqueue_egress(EgressMessage msg);
+    bool try_dequeue_egress(EgressMessage& msg);
     [[nodiscard]] bool queue_empty() const noexcept;
     void run();
 
@@ -78,6 +83,11 @@ private:
     std::size_t ring_mask_{};
     std::atomic<std::size_t> write_idx_{0};
     std::atomic<std::size_t> read_idx_{0};
+
+    std::vector<EgressMessage> egress_ring_{};
+    std::size_t egress_ring_mask_{};
+    std::atomic<std::size_t> egress_write_idx_{0};
+    std::atomic<std::size_t> egress_read_idx_{0};
 
     OrderBook book_;
     std::atomic<std::size_t> live_orders_{0};
