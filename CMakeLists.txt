@@ -33,3 +33,6 @@ add_test(NAME runtime_tests COMMAND runtime_tests)
 
 add_executable(latency_benchmark benchmarks/latency_benchmark.cpp)
 target_link_libraries(latency_benchmark PRIVATE lob)
+
+add_executable(throughput_benchmark benchmarks/throughput_benchmark.cpp)
+target_link_libraries(throughput_benchmark PRIVATE lob)
