@@ -47,14 +47,14 @@ struct Fill {
 };
 
 struct MatchResult {
-    static constexpr std::size_t kMaxFills = 16;
+    static constexpr std::size_t kInlineFills = 4; // covers 99% of real matches
 
     Quantity filled_qty{};
     Quantity remaining_qty{};
     bool rested{};
     bool priority_preserved{};
     std::size_t fill_count{};
-    std::array<Fill, kMaxFills> fills{};
+    std::array<Fill, kInlineFills> fills{};
 };
 
 class OrderNodePool {

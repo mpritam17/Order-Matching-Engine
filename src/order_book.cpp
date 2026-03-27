@@ -260,7 +260,8 @@ MatchResult OrderBook::process_limit_order(OrderId id, Side side, Price price, Q
             fill.aggressive_order_id = id;
             fill.price = passive_node->price;
             fill.qty = traded;
-            if (result.fill_count < MatchResult::kMaxFills) { result.fills[result.fill_count++] = fill; }
+            if (result.fill_count < MatchResult::kInlineFills) { result.fills[result.fill_count] = fill; }
+            result.fill_count++;
 
             remaining -= traded;
             result.filled_qty += traded;
@@ -316,7 +317,8 @@ MatchResult OrderBook::process_market_order(OrderId id, Side side, Quantity qty)
             fill.aggressive_order_id = id;
             fill.price = passive_node->price;
             fill.qty = traded;
-            if (result.fill_count < MatchResult::kMaxFills) { result.fills[result.fill_count++] = fill; }
+            if (result.fill_count < MatchResult::kInlineFills) { result.fills[result.fill_count] = fill; }
+            result.fill_count++;
 
             remaining -= traded;
             result.filled_qty += traded;

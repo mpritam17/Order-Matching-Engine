@@ -57,7 +57,7 @@ std::size_t parse_iterations(int argc, char** argv) {
 }
 
 void benchmark_submit_add(std::size_t iterations) {
-    lob::MatchingEngineRuntime engine(1 << 20, 1 << 18);
+    lob::MatchingEngineRuntime engine(1 << 20, 1 << 18, 2);
     std::vector<std::uint64_t> samples;
     samples.reserve(iterations);
 
@@ -80,7 +80,7 @@ void benchmark_submit_add(std::size_t iterations) {
 }
 
 void benchmark_limit_round_trip(std::size_t iterations) {
-    lob::MatchingEngineRuntime engine(1 << 20, 1 << 14);
+    lob::MatchingEngineRuntime engine(1 << 20, 1 << 14, 2);
     std::vector<std::uint64_t> samples;
     samples.reserve(iterations);
 
@@ -110,6 +110,13 @@ void benchmark_limit_round_trip(std::size_t iterations) {
 }  // namespace
 
 int main(int argc, char** argv) {
+#if defined(__linux__) && !defined(__ANDROID__)
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET(0, &cpuset);
+    pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+#endif
+
     const std::size_t iterations = parse_iterations(argc, argv);
 
     std::cout << "Latency benchmark iterations=" << iterations << '\n';
