@@ -33,16 +33,28 @@ Tests:
 ctest --test-dir build --output-on-failure
 ```
 
-Benchmark (default 20000 iterations):
+Latency Benchmark (default 20000 iterations):
 
 ```bash
 ./build/latency_benchmark
 ```
 
-Benchmark with custom iteration count:
+Latency Benchmark with custom iteration count:
 
 ```bash
 ./build/latency_benchmark 50000
+```
+
+Throughput Benchmark (default 1M iterations, 500k initial book size):
+
+```bash
+./build/throughput_benchmark
+```
+
+Throughput Benchmark with custom parameters (<iterations> <book_size>):
+
+```bash
+./build/throughput_benchmark 5000000 10000000
 ```
 
 ## Release Benchmark Run
@@ -60,7 +72,7 @@ cmake --build build-release -j
 - `include/lob/`: Public headers (`OrderBook`, runtime, types)
 - `src/`: Core implementation
 - `tests/`: Unit and runtime integration tests
-- `benchmarks/`: Latency benchmark executable
+- `benchmarks/`: Latency and throughput benchmark executables
 - `docs/`: Design and usage documentation
 
 ## Key APIs

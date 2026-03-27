@@ -47,7 +47,7 @@ void test_fifo_and_aggressive_matching() {
     const lob::MatchResult match = book.process_limit_order(1000, lob::Side::Buy, 101, 8);
     expect(match.filled_qty == 8, "aggressive fill quantity");
     expect(match.remaining_qty == 0, "no remaining for fully matched aggressive");
-    expect(match.fills.size() == 2, "two passive fills expected");
+    expect(match.fill_count == 2, "two passive fills expected");
     expect(match.fills[0].passive_order_id == 10, "first fill hits oldest passive");
     expect(match.fills[0].qty == 4, "first fill qty correct");
     expect(match.fills[1].passive_order_id == 11, "second fill hits next passive");
@@ -99,7 +99,7 @@ void test_market_order_matching() {
     const lob::MatchResult m = book.process_market_order(9000, lob::Side::Buy, 9);
     expect(m.filled_qty == 9, "market buy filled qty");
     expect(m.remaining_qty == 0, "market buy no remainder");
-    expect(m.fills.size() == 2, "market buy two fills");
+    expect(m.fill_count == 2, "market buy two fills");
     expect(m.fills[0].passive_order_id == 41, "market buy consumes best ask first");
     expect(m.fills[0].qty == 5, "market buy first fill qty");
     expect(m.fills[1].passive_order_id == 42, "market buy consumes next ask");

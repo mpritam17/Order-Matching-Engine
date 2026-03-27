@@ -17,5 +17,7 @@ This document tracks the detailed architectural changes and latency reductions a
 - **Change Implemented**: `std::promise` and `std::future` were stripped out entirely. We implemented a secondary bounded SPSC (Single-Producer Single-Consumer) ring buffer specifically for egress messages (`egress_ring_`). The matching thread now computes the results and lock-free pushes an `EgressMessage` back to the producer thread, which spin-waits for its specific response.
 - **Impact**: Substantial throughput and latency wins by removing dynamic heap allocations and kernel locks from the critical path. The **round-trip execution time for `submit_limit_order` dropped by approximately 61%** (p50 latency went from roughly `~4381ns` down to `~1688ns`). Tail latencies at the p99 level also tightened exceptionally.
 
----
-*Next planned optimizations: CPU core pinning (`pthread_setaffinity_np`) to prevent process migration, and backing hot arenas with huge pages for TLB optimization.*
+## 4. Thread Pinning and Core Isolation (Linux)
+- **Previous State**: The worker thread (`MatchingEngineRuntime::run()`) ran freely across whichever cores the Linux process scheduler saw fit. When the OS inevitably preempted the execution to migrate it to a different Core to balance load, this caused massive L1/L2 cache invalidations, leading to huge sporadic multi-millisecond tail latency spikes.
+- **Change Implemented**: Added deterministic thread pinning utilizing the POSIX function `pthread_setaffinity_np` directly within the initialization of the runtime loop. The worker thread strictly pins its execution to CPU Core 1. 
+- **Impact**: Multi-millisecond outliers on the max round-trips smoothed out. L1 and L2 caches stay extremely physically localized to the running execution pipeline preventing massive migration performance drops.

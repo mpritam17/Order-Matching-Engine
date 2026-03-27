@@ -260,7 +260,7 @@ MatchResult OrderBook::process_limit_order(OrderId id, Side side, Price price, Q
             fill.aggressive_order_id = id;
             fill.price = passive_node->price;
             fill.qty = traded;
-            result.fills.push_back(fill);
+            if (result.fill_count < MatchResult::kMaxFills) { result.fills[result.fill_count++] = fill; }
 
             remaining -= traded;
             result.filled_qty += traded;
@@ -316,7 +316,7 @@ MatchResult OrderBook::process_market_order(OrderId id, Side side, Quantity qty)
             fill.aggressive_order_id = id;
             fill.price = passive_node->price;
             fill.qty = traded;
-            result.fills.push_back(fill);
+            if (result.fill_count < MatchResult::kMaxFills) { result.fills[result.fill_count++] = fill; }
 
             remaining -= traded;
             result.filled_qty += traded;
@@ -381,6 +381,9 @@ PriceLevel* OrderBook::get_or_create_level(Side side, Price price) {
     auto [inserted_it, inserted] = levels.emplace(price, level);
     if (!inserted) {
         level_pool_.release(level);
+    } else {
+        auto& sorted = sorted_levels_[static_cast<std::size_t>(side)];
+        sorted.insert(std::lower_bound(sorted.begin(), sorted.end(), price), price);
     }
     return inserted_it->second;
 }
@@ -398,17 +401,14 @@ void OrderBook::refresh_best_bid_after_remove(Price removed_price) {
         return;
     }
 
-    if (levels_for(Side::Buy).empty()) {
+    auto& sorted = sorted_levels_[static_cast<std::size_t>(Side::Buy)];
+    if (sorted.empty()) {
         best_bid_ = 0;
         has_bid_ = false;
         return;
     }
 
-    Price max_price = levels_for(Side::Buy).begin()->first;
-    for (const auto& [price, _] : levels_for(Side::Buy)) {
-        max_price = std::max(max_price, price);
-    }
-    best_bid_ = max_price;
+    best_bid_ = sorted.back();
 }
 
 void OrderBook::refresh_best_ask_after_remove(Price removed_price) {
@@ -416,17 +416,14 @@ void OrderBook::refresh_best_ask_after_remove(Price removed_price) {
         return;
     }
 
-    if (levels_for(Side::Sell).empty()) {
+    auto& sorted = sorted_levels_[static_cast<std::size_t>(Side::Sell)];
+    if (sorted.empty()) {
         best_ask_ = 0;
         has_ask_ = false;
         return;
     }
 
-    Price min_price = levels_for(Side::Sell).begin()->first;
-    for (const auto& [price, _] : levels_for(Side::Sell)) {
-        min_price = std::min(min_price, price);
-    }
-    best_ask_ = min_price;
+    best_ask_ = sorted.front();
 }
 
 bool OrderBook::has_cross(Side aggressive_side, Price aggressive_price) const noexcept {
@@ -455,6 +452,11 @@ void OrderBook::remove_node(OrderNode* node) {
 
     if (level->empty()) {
         levels_for(side).erase(removed_price);
+        auto& sorted = sorted_levels_[static_cast<std::size_t>(side)];
+        auto sorted_it = std::lower_bound(sorted.begin(), sorted.end(), removed_price);
+        if (sorted_it != sorted.end() && *sorted_it == removed_price) {
+            sorted.erase(sorted_it);
+        }
         level_pool_.release(level);
         if (side == Side::Buy) {
             refresh_best_bid_after_remove(removed_price);

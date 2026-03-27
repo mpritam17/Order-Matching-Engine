@@ -4,6 +4,7 @@
 #include <bit>
 #include <chrono>
 #include <utility>
+#include <pthread.h>
 
 #if defined(__x86_64__) || defined(_M_X64)
 #include <immintrin.h>
@@ -25,12 +26,13 @@ std::size_t normalize_capacity(std::size_t requested) {
 
 }  // namespace
 
-MatchingEngineRuntime::MatchingEngineRuntime(std::size_t expected_orders, std::size_t queue_capacity)
+MatchingEngineRuntime::MatchingEngineRuntime(std::size_t expected_orders, std::size_t queue_capacity, int worker_core_id)
     : ring_(normalize_capacity(queue_capacity)),
       ring_mask_(ring_.size() - 1),
       egress_ring_(normalize_capacity(queue_capacity)),
       egress_ring_mask_(egress_ring_.size() - 1),
       book_(expected_orders),
+      worker_core_id_(worker_core_id),
       worker_([this] { run(); }) {}
 
 MatchingEngineRuntime::~MatchingEngineRuntime() {
@@ -246,6 +248,15 @@ bool MatchingEngineRuntime::queue_empty() const noexcept {
 }
 
 void MatchingEngineRuntime::run() {
+#if defined(__linux__) && !defined(__ANDROID__)
+    if (worker_core_id_ >= 0) {
+        cpu_set_t cpuset;
+        CPU_ZERO(&cpuset);
+        CPU_SET(worker_core_id_, &cpuset);
+        pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+    }
+#endif
+
     while (true) {
         Command cmd{};
 

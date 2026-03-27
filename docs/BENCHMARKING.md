@@ -1,10 +1,11 @@
 # Benchmarking Guide
 
-## Executable
+## Executables
 
 `latency_benchmark` is built from `benchmarks/latency_benchmark.cpp`.
+`throughput_benchmark` is built from `benchmarks/throughput_benchmark.cpp`.
 
-## What It Reports
+## What Latency Benchmark Reports
 
 Per scenario, it reports:
 
@@ -33,6 +34,7 @@ Debug build (quick sanity):
 cmake -S . -B build
 cmake --build build -j
 ./build/latency_benchmark 5000
+./build/throughput_benchmark 1000000 500000
 ```
 
 Release build (recommended):
@@ -41,6 +43,7 @@ Release build (recommended):
 cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release
 cmake --build build-release -j
 ./build-release/latency_benchmark 100000
+./build-release/throughput_benchmark 5000000 10000000
 ```
 
 ## Interpreting Results
